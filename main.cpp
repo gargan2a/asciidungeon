@@ -66,32 +66,17 @@ map<GridPosition, char> EntityMap;
 // ----------------- Enum for movement -----------------
 enum class Direction { Up, Down, Left, Right, None };
 
-// ----------------- Player Input -----------------
-Direction GetPlayerMoveDirection() {
-	if (_kbhit()) {
-		char key = _getch();
-		switch (tolower(key)) {
-		case 'w': return Direction::Up;
-		case 's': return Direction::Down;
-		case 'a': return Direction::Left;
-		case 'd': return Direction::Right;
-		case 'q': exit(0);
-		case 'e': return Direction::None; // special case for level regeneration testing
-		default: return Direction::None;
-		}
-	}
-	return Direction::None;
-}
-
 // ----------------- Level Generator -----------------
 class LevelGenerator {
 public:
+	
 	static int RandomInt(int minValue, int maxValue) {
 		uniform_int_distribution<> dist(minValue, maxValue);
 		return dist(rng);
 	}
 
 	static vector<char> GenerateLevel() {
+		
 		vector<char> level(GameFieldWidth * GameFieldHeight, TileGround);
 
 		// Add border walls
@@ -153,6 +138,7 @@ public:
 			if (reachableCount < walkableTiles - (int)clusterIndices.size()) {
 				for (int idx : clusterIndices) level[idx] = TileGround;
 			}
+			
 			else {
 				walkableTiles -= (int)clusterIndices.size();
 			}
@@ -165,6 +151,7 @@ public:
 // ----------------- Console Utilities -----------------
 class ConsoleUtils {
 public:
+	
 	static void HideCursor() {
 		HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 		CONSOLE_CURSOR_INFO cursorInfo;
@@ -191,6 +178,7 @@ public:
 // ----------------- HUD Bar -----------------
 class HUDBar {
 public:
+	
 	static void DrawHUDBar(int marginX = 2, const string& message = "") {
 		if ((int)message.length() > GameFieldWidth) return;
 
@@ -225,6 +213,7 @@ public:
 // ----------------- Level Renderer -----------------
 class LevelRenderer {
 public:
+	
 	static void DrawInitialMap(const vector<char>& levelData, const map<GridPosition, char>& entityMap, int marginX = 2) {
 		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 		COORD pos = { 0,0 };
@@ -265,6 +254,7 @@ public:
 	}
 
 private:
+	
 	static void SetTileColor(HANDLE hConsole, char ch) {
 		switch (ch) {
 		case TileWall: SetConsoleTextAttribute(hConsole, 8); break;
@@ -280,6 +270,7 @@ private:
 
 // ----------------- Game Utilities -----------------
 vector<GridPosition> GetWalkableTiles(const vector<char>& levelData) {
+	
 	vector<GridPosition> walkableTiles;
 	for (int y = 0; y < GameFieldHeight; ++y) {
 		for (int x = 0; x < GameFieldWidth; ++x) {
@@ -288,141 +279,148 @@ vector<GridPosition> GetWalkableTiles(const vector<char>& levelData) {
 			}
 		}
 	}
+	
 	return walkableTiles;
 }
 
-void PlaceEntitiesRandomly(vector<char>& levelData, map<GridPosition, char>& entityMap, char entityChar, int count) {
-	vector<GridPosition> walkableTiles = GetWalkableTiles(levelData);
-	shuffle(walkableTiles.begin(), walkableTiles.end(), rng);
+//------------- entity class -------------
+class EntityClass {
+public:
+	// ----------------- Encounter Handling -----------------
+	class Encounters {
+	public:
+	
+		static inline bool showingMessage = false;
+		static inline chrono::steady_clock::time_point lastMessageTime;
+		static inline string currentMessage = "";
 
-	int placedCount = 0;
-	for (auto& pos : walkableTiles) {
-		if (entityMap.count(pos)) continue;
-		entityMap[pos] = entityChar;
-		++placedCount;
-		if (placedCount >= count) break;
-	}
-}
-
-void UpdateEntities(vector<char>& levelData, map<GridPosition, char>& entityMap, const GridPosition& playerPos) {
-	vector<GridPosition> positions; // seznam entit, které se pohybují
-
-	// Uložíme všechny entity kromě hráče
-	for (auto& kv : entityMap) {
-		if (kv.second != TilePlayer) {
-			positions.push_back(kv.first);
-		}
-	}
-
-	for (auto& pos : positions) {
-		// Pokud entita už byla odstraněna (např. zabita nebo se smazala), přeskočíme ji
-		if (!entityMap.count(pos)) continue;
-
-		char entityType = entityMap[pos];
-		GridPosition newPos = pos;
-
-		bool moved = false;
-		// Zkusíme až 4 různé směry
-		vector<Direction> directions = { Direction::Up, Direction::Down, Direction::Left, Direction::Right };
-		shuffle(directions.begin(), directions.end(), rng); // náhodné pořadí
-
-		for (Direction dir : directions) {
-			newPos = pos;
-			switch (dir) {
-			case Direction::Up: newPos.y--; break;
-			case Direction::Down: newPos.y++; break;
-			case Direction::Left: newPos.x--; break;
-			case Direction::Right: newPos.x++; break;
-			default: break;
+		static void HandleEncounter(char entityType) {
+			switch (entityType) {
+			case TileEnemy:
+				currentMessage = "Encountered an enemy!";
+				break;
+			case TileMerchant:
+				currentMessage = "Encountered a merchant!";
+				break;
+			case TileBoss:
+				currentMessage = "Encountered a boss!";
+				break;
+			case TileMiniBoss:
+				currentMessage = "Encountered a miniboss!";
+				break;
+			default:
+				currentMessage = "";
+				return;
 			}
 
-			// Kontrola hranic mapy
-			if (newPos.x < 0 || newPos.x >= GameFieldWidth || newPos.y < 0 || newPos.y >= GameFieldHeight)
-				continue;
+			// start showing the message
+			showingMessage = true;
+			lastMessageTime = chrono::steady_clock::now();
 
-			// Kontrola, že cílová pozice je zem
-			if (levelData[newPos.y * GameFieldWidth + newPos.x] != TileGround)
-				continue;
-
-			// Kontrola kolize s hráčem
-			if (newPos == playerPos)
-				continue;
-
-			// Kontrola kolize s jinou entitou
-			if (entityMap.count(newPos))
-				continue;
-
-			// Pokud jsme sem došli, můžeme se pohnout
-			moved = true;
-			break;
+			HUDBar::ClearHUDBar(2);
+			HUDBar::DrawHUDBar(2, currentMessage);
 		}
 
-		if (moved) {
-			entityMap.erase(pos);
-			entityMap[newPos] = entityType;
+		static void UpdateHUD(const Player& player) {
+			using namespace chrono;
 
-			// Překreslíme změněné řádky
-			LevelRenderer::DrawChangedRows(levelData, entityMap, pos.y, newPos.y);
-		}
-		// Pokud žádný směr není volný -> zůstane stát
-	}
-}
-
-// ----------------- Encounter Handling -----------------
-class Encounters {
-public:
-	static inline bool showingMessage = false;
-	static inline chrono::steady_clock::time_point lastMessageTime;
-	static inline string currentMessage = "";
-
-	static void HandleEncounter(char entityType) {
-		switch (entityType) {
-		case TileEnemy:
-			currentMessage = "Encountered an enemy!";
-			break;
-		case TileMerchant:
-			currentMessage = "Encountered a merchant!";
-			break;
-		case TileBoss:
-			currentMessage = "Encountered a boss!";
-			break;
-		case TileMiniBoss:
-			currentMessage = "Encountered a miniboss!";
-			break;
-		default:
-			currentMessage = "";
-			return;
-		}
-
-		// Spustíme zobrazení zprávy
-		showingMessage = true;
-		lastMessageTime = chrono::steady_clock::now();
-
-		HUDBar::ClearHUDBar(2);
-		HUDBar::DrawHUDBar(2, currentMessage);
-	}
-
-	static void UpdateHUD(const Player& player) {
-		using namespace chrono;
-
-		if (showingMessage) {
-			auto now = steady_clock::now();
-			if (duration_cast<milliseconds>(now - lastMessageTime).count() >= 2000) {
-				// Po 2 sekundách vypíšeme zpět status hráče
-				showingMessage = false;
-				HUDBar::ClearHUDBar(2);
+			if (showingMessage) {
+				auto now = steady_clock::now();
+				if (duration_cast<milliseconds>(now - lastMessageTime).count() >= 2000) {
+					// after 2 seconds, clear the message and show player status
+					showingMessage = false;
+					HUDBar::ClearHUDBar(2);
+					HUDBar::DrawHUDBar(2, PlayerStatus(player));
+				}
+			}
+			else {
 				HUDBar::DrawHUDBar(2, PlayerStatus(player));
 			}
 		}
-		else {
-			HUDBar::DrawHUDBar(2, PlayerStatus(player));
+	};
+	static void PlaceEntitiesRandomly(vector<char>& levelData, map<GridPosition, char>& entityMap, char entityChar, int count) {
+		vector<GridPosition> walkableTiles = GetWalkableTiles(levelData);
+		shuffle(walkableTiles.begin(), walkableTiles.end(), rng);
+
+		int placedCount = 0;
+		for (auto& pos : walkableTiles) {
+			if (entityMap.count(pos)) continue;
+			entityMap[pos] = entityChar;
+			++placedCount;
+			if (placedCount >= count) break;
 		}
 	}
+
+	static void UpdateEntities(vector<char>& levelData, map<GridPosition, char>& entityMap, const GridPosition& playerPos) {
+		vector<GridPosition> positions; // list of entity positions that will try to move
+
+		// every entity except the player
+		for (auto& kv : entityMap) {
+			if (kv.second != TilePlayer) {
+				positions.push_back(kv.first);
+			}
+		}
+
+		for (auto& pos : positions) {
+			// if the entity was removed (e.g., encountered by player), skip it
+			if (!entityMap.count(pos)) continue;
+
+			char entityType = entityMap[pos];
+			GridPosition newPos = pos;
+
+			bool moved = false;
+			// try 4 directions in random order 
+			vector<Direction> directions = { Direction::Up, Direction::Down, Direction::Left, Direction::Right };
+			shuffle(directions.begin(), directions.end(), rng); // randomize order
+
+			for (Direction dir : directions) {
+				newPos = pos;
+				switch (dir) {
+				case Direction::Up: newPos.y--; break;
+				case Direction::Down: newPos.y++; break;
+				case Direction::Left: newPos.x--; break;
+				case Direction::Right: newPos.x++; break;
+				default: break;
+				}
+
+				// game field bounds check
+				if (newPos.x < 0 || newPos.x >= GameFieldWidth || newPos.y < 0 || newPos.y >= GameFieldHeight)
+					continue;
+
+				// check if the tile is walkable
+				if (levelData[newPos.y * GameFieldWidth + newPos.x] != TileGround)
+					continue;
+
+				// player collision check
+				if (newPos == playerPos)
+					continue;
+
+				// entity collision check
+				if (entityMap.count(newPos))
+					continue;
+
+				// if all checks passed, move the entity
+				moved = true;
+				break;
+			}
+
+			if (moved) {
+				entityMap.erase(pos);
+				entityMap[newPos] = entityType;
+
+				// redraw the two affected rows
+				LevelRenderer::DrawChangedRows(levelData, entityMap, pos.y, newPos.y);
+			}
+			// if not moved, do nothing
+		}
+	}
+
 };
 
 // ----------------- Player Class -----------------
 class PlayerClass {
 public:
+	
 	GridPosition position;
 	Player player;
 
@@ -472,7 +470,7 @@ public:
 
 		auto it = entityMap.find(newPos);
 		if (it != entityMap.end()) {
-			Encounters::HandleEncounter(it->second);
+			EntityClass::Encounters::HandleEncounter(it->second);
 			entityMap.erase(newPos);
 		}
 
@@ -496,7 +494,7 @@ public:
 		while (true) {
 			auto frameStart = steady_clock::now();
 
-			// --- Pohyb hráče ---
+			// --- player movement ---
 			Direction dir = GetMoveDirection();
 			if (dir != Direction::None) {
 				GridPosition newPos = position;
@@ -511,7 +509,7 @@ public:
 				if (CanMove(newPos, levelData)) {
 					auto it = entityMap.find(newPos);
 					if (it != entityMap.end()) {
-						Encounters::HandleEncounter(it->second); // start 2s zprávy
+						EntityClass::Encounters::HandleEncounter(it->second); // start showing encounter message
 						entityMap.erase(newPos);
 					}
 
@@ -525,15 +523,15 @@ public:
 				}
 			}
 
-			// --- Pohyb nepřátel každých 500 ms ---
+			// --- move enemies every 500 ms ---
 			auto now = steady_clock::now();
 			if (duration_cast<milliseconds>(now - lastEntityUpdate).count() >= 500) {
-				UpdateEntities(levelData, entityMap, position);
+				EntityClass::UpdateEntities(levelData, entityMap, position);
 				lastEntityUpdate = now;
 			}
 
-			// --- Aktualizace HUD (včetně zpráv na 2s) ---
-			Encounters::UpdateHUD(player);
+			// --- HUD update ---
+			EntityClass::Encounters::UpdateHUD(player);
 
 			// --- Frame timing ---
 			auto frameEnd = steady_clock::now();
@@ -547,26 +545,26 @@ public:
 
 // ----------------- Generate New Level -----------------
 void GenerateNewLevel() {
-	// Vygenerujeme novou mapu
+	// generate new level data
 	LevelData = LevelGenerator::GenerateLevel();
 
-	// Uložíme předchozí mapu pro diff (pokud potřebujeme)
+	// save previous entity map
 	map<GridPosition, char> previousEntityMap = EntityMap;
 
-	// Vyčistíme aktuální mapu a nastavíme hráče
+	// clear and set up player position
 	EntityMap.clear();
 	EntityMap[{1, 1}] = TilePlayer;
 
-	// Umístíme ostatní entity
-	PlaceEntitiesRandomly(LevelData, EntityMap, TileEnemy, 5);
-	PlaceEntitiesRandomly(LevelData, EntityMap, TileMerchant, 5);
-	PlaceEntitiesRandomly(LevelData, EntityMap, TileBoss, 5);
-	PlaceEntitiesRandomly(LevelData, EntityMap, TileMiniBoss, 5);
+	// place entities
+	EntityClass::PlaceEntitiesRandomly(LevelData, EntityMap, TileEnemy, 5);
+	EntityClass::PlaceEntitiesRandomly(LevelData, EntityMap, TileMerchant, 5);
+	EntityClass::PlaceEntitiesRandomly(LevelData, EntityMap, TileBoss, 5);
+	EntityClass::PlaceEntitiesRandomly(LevelData, EntityMap, TileMiniBoss, 5);
 
-	// První kompletní vykreslení mapy
+	// complete redraw of the map
 	LevelRenderer::DrawInitialMap(LevelData, EntityMap);
 
-	// Vykreslení HUD s aktuálním stavem hráče
+	// HUD with player status
 	HUDBar::ClearHUDBar(2);
 	HUDBar::DrawHUDBar(2, PlayerStatus(player));
 }
@@ -574,6 +572,7 @@ void GenerateNewLevel() {
 // ----------------- Game Loop -----------------
 class GameLoop {
 public:
+	
 	static void Run(vector<char> levelData, map<GridPosition, char> entityMap) {
 		PlayerClass playerInstance;
 		playerInstance.position = { 1,1 };
@@ -588,6 +587,7 @@ public:
 
 // ----------------- Logo -----------------
 void ShowLogo(int marginX = 2) {
+	
 	HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 	vector<string> logo = {
 		"            _____  _____ _____ _____            ",
@@ -610,6 +610,7 @@ void ShowLogo(int marginX = 2) {
 
 	COORD pos = { 0, 0 };
 	SetConsoleCursorPosition(consoleHandle, pos);
+	
 	for (int y = 0; y < GameFieldHeight; ++y) {
 		for (int i = 0; i < marginX; ++i) cout << ' ';
 		for (int x = 0; x < GameFieldWidth; ++x) cout << ' ';
@@ -617,6 +618,7 @@ void ShowLogo(int marginX = 2) {
 	}
 
 	int startY = (GameFieldHeight - logoHeight) / 2;
+	
 	for (int i = 0; i < logoHeight; ++i) {
 		const string& line = logo[i];
 		int startX = (GameFieldWidth - (int)line.size()) / 2 + marginX;
@@ -633,6 +635,7 @@ void ShowLogo(int marginX = 2) {
 
 	COORD clearPos = { 0, (SHORT)startY };
 	SetConsoleCursorPosition(consoleHandle, clearPos);
+	
 	for (int y = 0; y < logoHeight; ++y) {
 		for (int i = 0; i < marginX; ++i) cout << ' ';
 		for (int x = 0; x < GameFieldWidth; ++x) cout << ' ';
@@ -645,11 +648,13 @@ void ShowLogo(int marginX = 2) {
 
 // ----------------- Main -----------------
 int main() {
+	
 	ConsoleUtils::HideCursor();
 	int marginX = 2;
 	ConsoleUtils::SetConsoleSize(GameFieldWidth, GameFieldHeight, marginX);
 
 	bool firstRun = true;
+	
 	while (true) {
 		if (firstRun) {
 			firstRun = false;
