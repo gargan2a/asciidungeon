@@ -10,6 +10,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cctype>
+#include<unordered_map>
 
 using namespace std;
 
@@ -294,6 +295,7 @@ public:
     // ----------------- EntityManager -----------------
     class EntityManager {
     public:
+        // ----------------- ENCOUNTER HANDLER -----------------
         class Encounters {
         public:
             static inline bool showingMessage = false;
@@ -310,8 +312,6 @@ public:
                 }
                 showingMessage = true;
                 lastMessageTime = chrono::steady_clock::now();
-
-                // Draw message line only
                 Game::HUDBar::DrawHUDBar(2, currentMessage);
             }
 
@@ -327,6 +327,154 @@ public:
             }
         };
 
+        // ----------------- AI CONTROLLER -----------------
+        class AIController {
+        public:
+            static inline int stepCounter = 0;
+            static inline GridPosition currentTarget{};
+            static inline bool hasTarget = false;
+            static inline vector<GridPosition> currentPath;
+            static inline int reevalInterval = 2;
+
+            struct Node {
+                GridPosition pos;
+                int g, f;
+                bool operator>(const Node& other) const { return f > other.f; }
+            };
+
+            static int ManhattanDistance(const GridPosition& a, const GridPosition& b) {
+                return abs(a.x - b.x) + abs(a.y - b.y);
+            }
+
+            static bool IsWalkable(GridPosition pos, const vector<char>& levelData,
+                const map<GridPosition, char>& entityMap, GridPosition playerPos) {
+                if (pos.x < 0 || pos.x >= GameFieldWidth || pos.y < 0 || pos.y >= GameFieldHeight)
+                    return false;
+                if (levelData[pos.y * GameFieldWidth + pos.x] != TileGround)
+                    return false;
+                if (entityMap.count(pos) && pos != playerPos)
+                    return false;
+                return true;
+            }
+
+            // ---------------- LINE OF SIGHT CHECK ----------------
+            static bool HasLineOfSight(GridPosition from, GridPosition to,
+                const vector<char>& levelData) {
+                int x0 = from.x, y0 = from.y;
+                int x1 = to.x, y1 = to.y;
+                int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+                int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+                int err = dx + dy;
+
+                while (true) {
+                    if (levelData[y0 * GameFieldWidth + x0] != TileGround &&
+                        !(x0 == from.x && y0 == from.y))
+                        return false; // wall blocks LOS
+
+                    if (x0 == x1 && y0 == y1)
+                        break;
+                    int e2 = 2 * err;
+                    if (e2 >= dy) { err += dy; x0 += sx; }
+                    if (e2 <= dx) { err += dx; y0 += sy; }
+                }
+                return true;
+            }
+
+            // ---------------- PATHFINDING ----------------
+            static vector<GridPosition> AStarPath(GridPosition start, GridPosition goal,
+                const vector<char>& levelData,
+                const map<GridPosition, char>& entityMap) {
+                priority_queue<Node, vector<Node>, greater<Node>> open;
+                unordered_map<int, GridPosition> cameFrom;
+                unordered_map<int, int> gScore;
+
+                auto key = [](GridPosition p) { return p.y * GameFieldWidth + p.x; };
+                open.push({ start, 0, ManhattanDistance(start, goal) });
+                gScore[key(start)] = 0;
+
+                vector<GridPosition> dirs = { {0,1}, {0,-1}, {1,0}, {-1,0} };
+
+                while (!open.empty()) {
+                    Node current = open.top(); open.pop();
+                    if (current.pos == goal) {
+                        vector<GridPosition> path;
+                        for (GridPosition p = goal; p != start; p = cameFrom[key(p)])
+                            path.push_back(p);
+                        reverse(path.begin(), path.end());
+                        return path;
+                    }
+
+                    for (auto d : dirs) {
+                        GridPosition next = { current.pos.x + d.x, current.pos.y + d.y };
+                        if (!IsWalkable(next, levelData, entityMap, goal) && next != goal)
+                            continue;
+                        int tentative = gScore[key(current.pos)] + 1;
+                        if (!gScore.count(key(next)) || tentative < gScore[key(next)]) {
+                            cameFrom[key(next)] = current.pos;
+                            gScore[key(next)] = tentative;
+                            open.push({ next, tentative, tentative + ManhattanDistance(next, goal) });
+                        }
+                    }
+                }
+                return {};
+            }
+
+            // ---------------- ENEMY TARGETING ----------------
+            static GridPosition GetNextAIMove(vector<char>& levelData, map<GridPosition, char>& entityMap,
+                GridPosition playerPos) {
+                stepCounter++;
+
+                if (!hasTarget || stepCounter >= reevalInterval || !entityMap.count(currentTarget)) {
+                    hasTarget = false;
+                    stepCounter = 0;
+
+                    vector<pair<int, GridPosition>> visibleEnemies;
+                    vector<pair<int, GridPosition>> hiddenEnemies;
+
+                    for (auto& kv : entityMap) {
+                        char t = kv.second;
+                        if (t != TileEnemy && t != TileMiniBoss && t != TileBoss)
+                            continue;
+
+                        int dist = ManhattanDistance(kv.first, playerPos);
+                        if (HasLineOfSight(kv.first, playerPos, levelData))
+                            visibleEnemies.push_back({ dist, kv.first });
+                        else
+                            hiddenEnemies.push_back({ dist, kv.first });
+                    }
+
+                    GridPosition chosen{ -1, -1 };
+
+                    if (!visibleEnemies.empty()) {
+                        sort(visibleEnemies.begin(), visibleEnemies.end(),
+                            [](auto& a, auto& b) { return a.first < b.first; });
+                        chosen = visibleEnemies.front().second;
+                    }
+                    else if (!hiddenEnemies.empty()) {
+                        sort(hiddenEnemies.begin(), hiddenEnemies.end(),
+                            [](auto& a, auto& b) { return a.first < b.first; });
+                        chosen = hiddenEnemies.front().second;
+                    }
+
+                    if (chosen.x != -1) {
+                        currentTarget = chosen;
+                        hasTarget = true;
+                        currentPath = AStarPath(currentTarget, playerPos, levelData, entityMap);
+                    }
+                }
+
+                if (hasTarget && !currentPath.empty()) {
+                    GridPosition nextStep = currentPath.front();
+                    currentPath.erase(currentPath.begin());
+                    return nextStep;
+                }
+
+                return { -1, -1 };
+            }
+        };
+
+
+        // ----------------- UTILITIES -----------------
         static vector<GridPosition> GetWalkableTiles(const vector<char>& levelData) {
             vector<GridPosition> walkable;
             for (int y = 0; y < GameFieldHeight; ++y)
@@ -336,7 +484,8 @@ public:
             return walkable;
         }
 
-        static void PlaceEntitiesRandomly(vector<char>& levelData, map<GridPosition, char>& entityMap, char entityChar, int count) {
+        static void PlaceEntitiesRandomly(vector<char>& levelData, map<GridPosition, char>& entityMap,
+            char entityChar, int count) {
             auto walkable = GetWalkableTiles(levelData);
             shuffle(walkable.begin(), walkable.end(), rng);
             int placed = 0;
@@ -347,33 +496,73 @@ public:
             }
         }
 
-        static void UpdateEntities(vector<char>& levelData, map<GridPosition, char>& entityMap, GridPosition playerPos) {
+        // ----------------- ENTITY UPDATES -----------------
+        static void UpdateEntities(vector<char>& levelData, map<GridPosition, char>& entityMap,
+            GridPosition playerPos) {
             vector<GridPosition> positions;
-            for (auto& kv : entityMap) if (kv.second != TilePlayer) positions.push_back(kv.first);
+            for (auto& kv : entityMap)
+                if (kv.second != TilePlayer)
+                    positions.push_back(kv.first);
+
+            GridPosition aiMove = AIController::GetNextAIMove(levelData, entityMap, playerPos);
 
             for (auto& pos : positions) {
                 if (!entityMap.count(pos)) continue;
                 char type = entityMap[pos];
                 GridPosition newPos = pos;
-                vector<Direction> dirs = { Direction::Up, Direction::Down, Direction::Left, Direction::Right };
-                shuffle(dirs.begin(), dirs.end(), rng);
-                bool moved = false;
-                for (auto dir : dirs) {
-                    newPos = pos;
-                    switch (dir) {
-                    case Direction::Up: newPos.y--; break;
-                    case Direction::Down: newPos.y++; break;
-                    case Direction::Left: newPos.x--; break;
-                    case Direction::Right: newPos.x++; break;
-                    default: break;
-                    }
-                    if (newPos.x < 0 || newPos.x >= GameFieldWidth || newPos.y < 0 || newPos.y >= GameFieldHeight) continue;
-                    if (levelData[newPos.y * GameFieldWidth + newPos.x] != TileGround) continue;
-                    if (newPos == playerPos) continue;
-                    if (entityMap.count(newPos)) continue;
-                    moved = true; break;
+
+                if (AIController::hasTarget && pos == AIController::currentTarget && aiMove.x != -1) {
+                    newPos = aiMove;
                 }
-                if (moved) {
+                else {
+                    vector<Direction> dirs = { Direction::Up, Direction::Down, Direction::Left, Direction::Right };
+                    shuffle(dirs.begin(), dirs.end(), rng);
+                    for (auto dir : dirs) {
+                        newPos = pos;
+                        switch (dir) {
+                        case Direction::Up: newPos.y--; break;
+                        case Direction::Down: newPos.y++; break;
+                        case Direction::Left: newPos.x--; break;
+                        case Direction::Right: newPos.x++; break;
+                        default: break;
+                        }
+
+                        if (newPos.x < 0 || newPos.x >= GameFieldWidth || newPos.y < 0 || newPos.y >= GameFieldHeight)
+                            continue;
+                        if (levelData[newPos.y * GameFieldWidth + newPos.x] != TileGround)
+                            continue;
+
+                        // entities block each other completely
+                        if (entityMap.count(newPos) && entityMap[newPos] != TilePlayer)
+                            continue;
+
+                        // allow enemies to chase player
+                        if (newPos == playerPos)
+                            break;
+
+                        if (!entityMap.count(newPos))
+                            break;
+                    }
+                }
+
+                // Enemy catches player
+                if (newPos == playerPos) {
+                    if (type == TileEnemy || type == TileMiniBoss || type == TileBoss) {
+                        entityMap.erase(pos);
+                        Encounters::HandleEncounter(type);
+                        Engine::LevelRenderer::DrawChangedRows(levelData, entityMap, pos.y, newPos.y);
+                        continue;
+                    }
+                    else {
+                        continue;
+                    }
+                }
+
+                // Prevent collisions between entities
+                if (newPos != pos) {
+                    if (entityMap.count(newPos) && entityMap[newPos] != TilePlayer)
+                        continue;
+
                     entityMap.erase(pos);
                     entityMap[newPos] = type;
                     Engine::LevelRenderer::DrawChangedRows(levelData, entityMap, pos.y, newPos.y);
@@ -381,6 +570,8 @@ public:
             }
         }
     };
+
+
 
     // ----------------- Player Movement -----------------
     static bool CanMove(const GridPosition& pos, const vector<char>& levelData) {
@@ -450,7 +641,7 @@ public:
             if (dir != Direction::None) MovePlayer(dir);
 
             auto now = steady_clock::now();
-            if (duration_cast<milliseconds>(now - lastEntityUpdate).count() >= 500) {
+            if (duration_cast<milliseconds>(now - lastEntityUpdate).count() >= 300) {
                 EntityManager::UpdateEntities(LevelData, EntityMap, playerPos);
                 lastEntityUpdate = now;
             }
