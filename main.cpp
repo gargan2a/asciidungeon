@@ -27,7 +27,10 @@ const char TileMerchant = 'M';
 const char TileBoss = 'B';
 const char TileMiniBoss = 'b';
 
+bool isPaused = false;
+
 struct GridPosition {
+	
 	int x, y;
 	GridPosition(int xPos = 0, int yPos = 0) : x(xPos), y(yPos) {}
 	bool operator<(const GridPosition& other) const { return tie(y, x) < tie(other.y, other.x); }
@@ -35,16 +38,18 @@ struct GridPosition {
 	bool operator!=(const GridPosition& other) const { return !(*this == other); }
 };
 
-
 struct Player {
+	
 	int hp, maxHp, attack, defense, level;
 };
 
 // ----------------- Engine Class -----------------
 class Engine {
 public:
+	
 	// ----------------- Console -----------------
 	static void HideCursor() {
+		
 		HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 		CONSOLE_CURSOR_INFO cursorInfo;
 		GetConsoleCursorInfo(consoleHandle, &cursorInfo);
@@ -53,6 +58,7 @@ public:
 	}
 
 	static void SetConsoleSize(int width, int height, int marginX = 2) {
+		
 		HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 		COORD bufferSize = { (SHORT)(width + marginX * 2), (SHORT)(height + 5) };
 		SMALL_RECT windowSize = { 0, 0, bufferSize.X - 1, bufferSize.Y - 1 };
@@ -65,21 +71,48 @@ public:
 		SetWindowLong(hwnd, GWL_STYLE, style);
 	}
 
+	static void ClearConsole() {
+		
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO csbi;
+		GetConsoleScreenBufferInfo(hConsole, &csbi);
+		DWORD consoleSize = csbi.dwSize.X * csbi.dwSize.Y;
+		COORD topLeft = { 0, 0 };
+		DWORD charsWritten;
+
+		// fill with spaces
+		FillConsoleOutputCharacter(hConsole, ' ', consoleSize, topLeft, &charsWritten);
+
+		// default color
+		FillConsoleOutputAttribute(hConsole, csbi.wAttributes, consoleSize, topLeft, &charsWritten);
+
+		// corsor on 0,0
+		SetConsoleCursorPosition(hConsole, topLeft);
+	}
+
+
 	// ----------------- Level Generator -----------------
 	class LevelGenerator {
 	public:
+		
 		static int RandomInt(int minValue, int maxValue) {
+			
 			uniform_int_distribution<> dist(minValue, maxValue);
 			return dist(rng);
 		}
 
 		static vector<char> GenerateLevel() {
+			
 			vector<char> level(GameFieldWidth * GameFieldHeight, TileGround);
+			
 			for (int x = 0; x < GameFieldWidth; ++x) {
+				
 				level[x] = TileWall;
 				level[(GameFieldHeight - 1) * GameFieldWidth + x] = TileWall;
 			}
+			
 			for (int y = 0; y < GameFieldHeight; ++y) {
+				
 				level[y * GameFieldWidth] = TileWall;
 				level[y * GameFieldWidth + (GameFieldWidth - 1)] = TileWall;
 			}
@@ -89,16 +122,21 @@ public:
 			int maxClusters = 150;
 
 			for (int attempt = 0; attempt < maxClusters; ++attempt) {
+				
 				int clusterWidth = RandomInt(2, 4);
 				int clusterHeight = RandomInt(2, 4);
 				int clusterX = RandomInt(1, GameFieldWidth - clusterWidth - 2);
 				int clusterY = RandomInt(1, GameFieldHeight - clusterHeight - 2);
-
 				vector<int> clusterIndices;
+				
 				for (int dy = 0; dy < clusterHeight; ++dy)
+					
 					for (int dx = 0; dx < clusterWidth; ++dx) {
+						
 						int index = (clusterY + dy) * GameFieldWidth + (clusterX + dx);
+						
 						if (level[index] == TileGround) {
+							
 							clusterIndices.push_back(index);
 							level[index] = TileWall;
 						}
@@ -113,12 +151,18 @@ public:
 				const int dyArr[] = { 0, 0, 1, -1 };
 
 				while (!bfsQueue.empty()) {
+					
 					GridPosition current = bfsQueue.front(); bfsQueue.pop();
+					
 					for (int d = 0; d < 4; ++d) {
+						
 						int nx = current.x + dxArr[d];
 						int ny = current.y + dyArr[d];
+						
 						if (nx > 0 && nx < GameFieldWidth - 1 && ny > 0 && ny < GameFieldHeight - 1) {
+							
 							int idx = ny * GameFieldWidth + nx;
+							
 							if (!visited[idx] && level[idx] == TileGround) {
 								visited[idx] = true;
 								++reachableCount;
@@ -129,9 +173,12 @@ public:
 				}
 
 				if (reachableCount < walkableTiles - (int)clusterIndices.size()) {
+					
 					for (int idx : clusterIndices) level[idx] = TileGround;
 				}
+				
 				else {
+					
 					walkableTiles -= (int)clusterIndices.size();
 				}
 			}
@@ -143,55 +190,71 @@ public:
 	// ----------------- Level Renderer -----------------
 	class LevelRenderer {
 	public:
+		
 		static void DrawInitialMap(const vector<char>& levelData, const map<GridPosition, char>& entityMap, int marginX = 2);
+		
 		static void DrawRow(const vector<char>& levelData, const map<GridPosition, char>& entityMap, int row, int marginX = 2);
+		
 		static void DrawChangedRows(const vector<char>& levelData, const map<GridPosition, char>& entityMap, int prevRow, int curRow, int marginX = 2);
 	private:
+		
 		static void SetTileColor(HANDLE hConsole, char ch);
 	};
 };
 
 // ----------------- LevelRenderer Definitions -----------------
 void Engine::LevelRenderer::DrawInitialMap(const vector<char>& levelData, const map<GridPosition, char>& entityMap, int marginX) {
+	
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 	COORD pos = { 0, 0 };
 	SetConsoleCursorPosition(hConsole, pos);
 
 	for (int y = 0; y < GameFieldHeight; ++y) {
+		
 		for (int i = 0; i < marginX; ++i) cout << ' ';
+		
 		for (int x = 0; x < GameFieldWidth; ++x) {
+			
 			GridPosition gp{ x, y };
 			char ch = entityMap.count(gp) ? entityMap.at(gp) : levelData[y * GameFieldWidth + x];
 			SetTileColor(hConsole, ch);
 			cout << ch;
 		}
+		
 		cout << '\n';
 	}
+	
 	SetConsoleTextAttribute(hConsole, 7);
 }
 
 void Engine::LevelRenderer::DrawRow(const vector<char>& levelData, const map<GridPosition, char>& entityMap, int row, int marginX) {
+	
 	if (row < 0 || row >= GameFieldHeight) return;
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 	COORD pos = { 0, (SHORT)row };
 	SetConsoleCursorPosition(hConsole, pos);
 
 	for (int i = 0; i < marginX; ++i) cout << ' ';
+	
 	for (int x = 0; x < GameFieldWidth; ++x) {
+		
 		GridPosition gp{ x, row };
 		char ch = entityMap.count(gp) ? entityMap.at(gp) : levelData[row * GameFieldWidth + x];
 		SetTileColor(hConsole, ch);
 		cout << ch;
 	}
+	
 	SetConsoleTextAttribute(hConsole, 7);
 }
 
 void Engine::LevelRenderer::DrawChangedRows(const vector<char>& levelData, const map<GridPosition, char>& entityMap, int prevRow, int curRow, int marginX) {
+	
 	if (prevRow != curRow) DrawRow(levelData, entityMap, prevRow, marginX);
 	DrawRow(levelData, entityMap, curRow, marginX);
 }
 
 void Engine::LevelRenderer::SetTileColor(HANDLE hConsole, char ch) {
+	
 	switch (ch) {
 	case TileWall: SetConsoleTextAttribute(hConsole, 8); break;
 	case TilePlayer: SetConsoleTextAttribute(hConsole, 9); break;
@@ -206,13 +269,15 @@ void Engine::LevelRenderer::SetTileColor(HANDLE hConsole, char ch) {
 // ----------------- Game Class -----------------
 class Game {
 public:
+	
 	vector<char> LevelData;
 	map<GridPosition, char> EntityMap;
 	Player player;
 	GridPosition playerPos;
 	enum class Direction { Up, Down, Left, Right, None };
-
+	
 	Game() {
+		
 		player = { 100, 100, 10, 5, 1 };
 		playerPos = { 1, 1 };
 		GenerateNewLevel();
@@ -220,11 +285,13 @@ public:
 
 	// ----------------- HUD -----------------
 	void DrawHUD(const string& message = "") {
+		
 		string msg = message.empty() ? PlayerStatus() : message;
 		HUDBar::DrawHUDBar(2, msg);
 	}
 
 	string PlayerStatus() const {
+		
 		stringstream ss;
 		ss << "HP:" << player.hp << "/" << player.maxHp
 			<< " ATK:" << player.attack
@@ -234,6 +301,7 @@ public:
 	}
 
 	static string PlayerStatusStatic(const Player& player) {
+		
 		stringstream ss;
 		ss << "HP:" << player.hp << "/" << player.maxHp
 			<< " ATK:" << player.attack
@@ -245,10 +313,13 @@ public:
 	//----- input handling class -----
 	class InputManager {
 	public:
+		
 		static bool up, down, left, right;
 
 		static void Update() {
+			
 			while (_kbhit()) {
+				
 				char key = _getch();
 				key = tolower(key);
 				switch (key) {
@@ -262,6 +333,7 @@ public:
 		}
 
 		static void Reset() {
+			
 			up = down = left = right = false;
 		}
 	};
@@ -269,12 +341,14 @@ public:
 	// ----------------- HUDBar Nested Class -----------------
 	class HUDBar {
 	public:
+		
 		static string lastMessage; // keep track of last drawn HUD
 
 		static void DrawHUDBar(int marginX, const string& message) {
+			
 			if (message == lastMessage) return; // no redraw if same
+			
 			lastMessage = message;
-
 			HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 			SetConsoleTextAttribute(consoleHandle, 7);
 			COORD pos = { 0, (SHORT)(GameFieldHeight + 1) };
@@ -290,18 +364,23 @@ public:
 			cout << margin;
 			SetConsoleTextAttribute(consoleHandle, 14); // Yellow
 			cout << message;
+			
 			if ((int)message.size() < GameFieldWidth)
+				
 				cout << string(GameFieldWidth - message.size(), ' ');
 			cout << '\n';
 
 			// Bottom border
 			SetConsoleTextAttribute(consoleHandle, 7);
 			cout << margin;
+			
 			for (int i = 0; i < GameFieldWidth; ++i) cout << '=';
+			
 			cout << '\n';
 		}
 
 		static void ClearHUDBar(int marginX) {
+			
 			HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 			SetConsoleTextAttribute(consoleHandle, 7);
 			COORD pos = { 0, (SHORT)(GameFieldHeight + 1) };
@@ -309,10 +388,12 @@ public:
 			string margin(marginX, ' ');
 
 			for (int i = 0; i < 3; ++i) {
+				
 				cout << margin;
 				for (int j = 0; j < GameFieldWidth; ++j) cout << ' ';
 				cout << '\n';
 			}
+			
 			lastMessage = ""; // reset last message
 		}
 	};
@@ -320,31 +401,87 @@ public:
 	// ----------------- EntityManager -----------------
 	class EntityManager {
 	public:
+		
 		// ----------------- ENCOUNTER HANDLER -----------------
 		class Encounters {
 		public:
+			
 			static bool showingMessage;
 			static chrono::steady_clock::time_point lastMessageTime;
 			static string currentMessage;
 
-			static void HandleEncounter(char entityType) {
+			static void HandleEncounter(Game& game, char entityType) {
+				
 				switch (entityType) {
-				case TileEnemy: currentMessage = "Encountered an enemy!"; break;
-				case TileMerchant: currentMessage = "Encountered a merchant!"; break;
-				case TileBoss: currentMessage = "Encountered a boss!"; break;
-				case TileMiniBoss: currentMessage = "Encountered a miniboss!"; break;
-				default: currentMessage = ""; return;
+				
+				case TileEnemy:
+					currentMessage = "Encountered an enemy!";
+					EnemyEncounter(game);
+					break;
+				
+				case TileMerchant:
+					currentMessage = "Encountered a merchant!";
+					MerchantEncounter(game);
+					break;
+				
+				case TileBoss:
+					currentMessage = "Encountered a boss!";
+					BossEncounter(game);
+					break;
+				
+				case TileMiniBoss:
+					currentMessage = "Encountered a miniboss!";
+					MinibossEncounter(game);
+					break;
+				
+				default:
+					currentMessage = "";
+					return;
 				}
+				
 				showingMessage = true;
 				lastMessageTime = chrono::steady_clock::now();
 				Game::HUDBar::DrawHUDBar(2, currentMessage);
 			}
 
+			static void EnemyEncounter(Game& game) {
+				
+				game.Pause();
+				Sleep(2000);
+				game.Resume();
+			}
+			
+			static void MerchantEncounter(Game& game) {
+				
+				game.Pause();
+				Sleep(2000);
+				game.Resume();
+			}
+			
+			static void BossEncounter(Game& game) {
+				
+				game.Pause();
+				Sleep(2000);
+				game.Resume();
+			}
+			
+			static void MinibossEncounter(Game& game) {
+				
+				game.Pause();
+				Sleep(2000);
+				game.Resume();
+			}
+
 			static void UpdateHUD(Player& player) {
+				
 				using namespace chrono;
+				
 				if (showingMessage) {
+					
 					auto now = steady_clock::now();
+					
 					if (duration_cast<milliseconds>(now - lastMessageTime).count() >= 2000) {
+						
 						showingMessage = false;
 						Game::HUDBar::DrawHUDBar(2, Game::PlayerStatusStatic(player));
 					}
@@ -357,6 +494,7 @@ public:
 		// ----------------- AI CONTROLLER -----------------
 		class AIController {
 		public:
+			
 			static int stepCounter;
 			static GridPosition currentTarget;
 			static bool hasTarget;
@@ -364,28 +502,42 @@ public:
 			static int reevalInterval;
 
 			struct Node {
+				
 				GridPosition pos;
 				int g, f;
 				bool operator>(const Node& other) const { return f > other.f; }
 			};
 
 			static int ManhattanDistance(const GridPosition& a, const GridPosition& b) {
+				
 				return abs(a.x - b.x) + abs(a.y - b.y);
 			}
 
 			static bool IsWalkable(GridPosition pos, const vector<char>& levelData,
+
 				const map<GridPosition, char>& entityMap, GridPosition playerPos) {
-				if (pos.x < 0 || pos.x >= GameFieldWidth || pos.y < 0 || pos.y >= GameFieldHeight)
+
+				if (pos.x < 0 || pos.x >= GameFieldWidth || pos.y < 0 || pos.y >= GameFieldHeight) {
+
 					return false;
-				if (levelData[pos.y * GameFieldWidth + pos.x] != TileGround)
+				}
+				
+				if (levelData[pos.y * GameFieldWidth + pos.x] != TileGround){
+
 					return false;
-				if (entityMap.count(pos) && pos != playerPos)
+				}
+				
+				if (entityMap.count(pos) && pos != playerPos) {
+
 					return false;
+				}
+				
 				return true;
 			}
 
 			// ---------------- LINE OF SIGHT CHECK ----------------
 			static bool HasLineOfSight(GridPosition from, GridPosition to,
+				
 				const vector<char>& levelData) {
 				int x0 = from.x, y0 = from.y;
 				int x1 = to.x, y1 = to.y;
@@ -394,21 +546,29 @@ public:
 				int err = dx + dy;
 
 				while (true) {
+					
 					if (levelData[y0 * GameFieldWidth + x0] != TileGround &&
+						
 						!(x0 == from.x && y0 == from.y))
 						return false; // wall blocks LOS
 
 					if (x0 == x1 && y0 == y1)
+						
 						break;
+					
 					int e2 = 2 * err;
+					
 					if (e2 >= dy) { err += dy; x0 += sx; }
+					
 					if (e2 <= dx) { err += dx; y0 += sy; }
 				}
+				
 				return true;
 			}
 
 			// ---------------- PATHFINDING ----------------
 			static vector<GridPosition> AStarPath(GridPosition start, GridPosition goal,
+				
 				const vector<char>& levelData,
 				const map<GridPosition, char>& entityMap) {
 				priority_queue<Node, vector<Node>, greater<Node>> open;
@@ -418,40 +578,52 @@ public:
 				auto key = [](GridPosition p) { return p.y * GameFieldWidth + p.x; };
 				open.push({ start, 0, ManhattanDistance(start, goal) });
 				gScore[key(start)] = 0;
-
 				vector<GridPosition> dirs = { {0,1}, {0,-1}, {1,0}, {-1,0} };
 
 				while (!open.empty()) {
+					
 					Node current = open.top(); open.pop();
+					
 					if (current.pos == goal) {
+						
 						vector<GridPosition> path;
+						
 						for (GridPosition p = goal; p != start; p = cameFrom[key(p)])
+							
 							path.push_back(p);
 						reverse(path.begin(), path.end());
 						return path;
 					}
 
 					for (auto d : dirs) {
+						
 						GridPosition next = { current.pos.x + d.x, current.pos.y + d.y };
+						
 						if (!IsWalkable(next, levelData, entityMap, goal) && next != goal)
+							
 							continue;
 						int tentative = gScore[key(current.pos)] + 1;
+						
 						if (!gScore.count(key(next)) || tentative < gScore[key(next)]) {
+							
 							cameFrom[key(next)] = current.pos;
 							gScore[key(next)] = tentative;
 							open.push({ next, tentative, tentative + ManhattanDistance(next, goal) });
 						}
 					}
 				}
+				
 				return {};
 			}
 
 			// ---------------- ENEMY TARGETING ----------------
 			static GridPosition GetNextAIMove(vector<char>& levelData, map<GridPosition, char>& entityMap,
+				
 				GridPosition playerPos) {
 				stepCounter++;
 
 				if (!hasTarget || stepCounter >= reevalInterval || !entityMap.count(currentTarget)) {
+					
 					hasTarget = false;
 					stepCounter = 0;
 
@@ -459,13 +631,17 @@ public:
 					vector<pair<int, GridPosition>> hiddenEnemies;
 
 					for (auto& kv : entityMap) {
+						
 						char t = kv.second;
 						if (t != TileEnemy && t != TileMiniBoss && t != TileBoss)
 							continue;
 
 						int dist = ManhattanDistance(kv.first, playerPos);
+						
 						if (HasLineOfSight(kv.first, playerPos, levelData))
+							
 							visibleEnemies.push_back({ dist, kv.first });
+						
 						else
 							hiddenEnemies.push_back({ dist, kv.first });
 					}
@@ -473,17 +649,21 @@ public:
 					GridPosition chosen{ -1, -1 };
 
 					if (!visibleEnemies.empty()) {
+						
 						sort(visibleEnemies.begin(), visibleEnemies.end(),
 							[](auto& a, auto& b) { return a.first < b.first; });
 						chosen = visibleEnemies.front().second;
 					}
+					
 					else if (!hiddenEnemies.empty()) {
+						
 						sort(hiddenEnemies.begin(), hiddenEnemies.end(),
 							[](auto& a, auto& b) { return a.first < b.first; });
 						chosen = hiddenEnemies.front().second;
 					}
 
 					if (chosen.x != -1) {
+						
 						currentTarget = chosen;
 						hasTarget = true;
 						currentPath = AStarPath(currentTarget, playerPos, levelData, entityMap);
@@ -491,6 +671,7 @@ public:
 				}
 
 				if (hasTarget && !currentPath.empty()) {
+					
 					GridPosition nextStep = currentPath.front();
 					currentPath.erase(currentPath.begin());
 					return nextStep;
@@ -504,48 +685,70 @@ public:
 
 		// ----------------- UTILITIES -----------------
 		static vector<GridPosition> GetWalkableTiles(const vector<char>& levelData) {
+			
 			vector<GridPosition> walkable;
+			
 			for (int y = 0; y < GameFieldHeight; ++y)
+				
 				for (int x = 0; x < GameFieldWidth; ++x)
+					
 					if (levelData[y * GameFieldWidth + x] == TileGround)
+						
 						walkable.push_back({ x, y });
+			
 			return walkable;
 		}
 
 		static void PlaceEntitiesRandomly(vector<char>& levelData, map<GridPosition, char>& entityMap,
+			
 			char entityChar, int count) {
 			auto walkable = GetWalkableTiles(levelData);
 			shuffle(walkable.begin(), walkable.end(), rng);
 			int placed = 0;
+			
 			for (auto& pos : walkable) {
+				
 				if (entityMap.count(pos)) continue;
+				
 				entityMap[pos] = entityChar;
+				
 				if (++placed >= count) break;
 			}
 		}
 
 		// ----------------- ENTITY UPDATES -----------------
-		static void UpdateEntities(vector<char>& levelData, map<GridPosition, char>& entityMap,
+		static void UpdateEntities(Game& game,vector<char>& levelData, map<GridPosition, char>& entityMap,
+			
 			GridPosition playerPos) {
 			vector<GridPosition> positions;
+			
 			for (auto& kv : entityMap)
+				
 				if (kv.second != TilePlayer)
+					
 					positions.push_back(kv.first);
 
 			GridPosition aiMove = AIController::GetNextAIMove(levelData, entityMap, playerPos);
 
 			for (auto& pos : positions) {
+				
 				if (!entityMap.count(pos)) continue;
+				
 				char type = entityMap[pos];
 				GridPosition newPos = pos;
 
 				if (AIController::hasTarget && pos == AIController::currentTarget && aiMove.x != -1) {
+					
 					newPos = aiMove;
 				}
+				
 				else {
+					
 					vector<Direction> dirs = { Direction::Up, Direction::Down, Direction::Left, Direction::Right };
 					shuffle(dirs.begin(), dirs.end(), rng);
+					
 					for (auto dir : dirs) {
+						
 						newPos = pos;
 						switch (dir) {
 						case Direction::Up: newPos.y--; break;
@@ -556,39 +759,52 @@ public:
 						}
 
 						if (newPos.x < 0 || newPos.x >= GameFieldWidth || newPos.y < 0 || newPos.y >= GameFieldHeight)
+							
 							continue;
+						
 						if (levelData[newPos.y * GameFieldWidth + newPos.x] != TileGround)
+							
 							continue;
 
 						// entities block each other completely
 						if (entityMap.count(newPos) && entityMap[newPos] != TilePlayer)
+							
 							continue;
 
 						// allow enemies to chase player
 						if (newPos == playerPos)
+							
 							break;
 
 						if (!entityMap.count(newPos))
+							
 							break;
 					}
 				}
 
 				// Enemy catches player
 				if (newPos == playerPos) {
+					
 					if (type == TileEnemy || type == TileMiniBoss || type == TileBoss) {
+						
 						entityMap.erase(pos);
-						Encounters::HandleEncounter(type);
+						// right instance
+						EntityManager::Encounters::HandleEncounter(game, type);
 						Engine::LevelRenderer::DrawChangedRows(levelData, entityMap, pos.y, newPos.y);
 						continue;
 					}
+					
 					else {
+						
 						continue;
 					}
 				}
-
+				
 				// Prevent collisions between entities
 				if (newPos != pos) {
+					
 					if (entityMap.count(newPos) && entityMap[newPos] != TilePlayer)
+						
 						continue;
 
 					entityMap.erase(pos);
@@ -603,41 +819,63 @@ public:
 
 	// ----------------- Player Movement -----------------
 	static bool CanMove(const GridPosition& pos, const vector<char>& levelData) {
+		
 		if (pos.x < 0 || pos.x >= GameFieldWidth || pos.y < 0 || pos.y >= GameFieldHeight) return false;
+		
 		return levelData[pos.y * GameFieldWidth + pos.x] == TileGround;
 	}
 
 	static Direction GetMoveDirection() {
+		
 		if (InputManager::up) return Direction::Up;
+		
 		if (InputManager::down) return Direction::Down;
+		
 		if (InputManager::left) return Direction::Left;
+		
 		if (InputManager::right) return Direction::Right;
+		
 		return Direction::None;
 	}
 
 	void MovePlayer(Direction dir) {
+		
 		GridPosition newPos = playerPos;
+		
 		switch (dir) {
+		
 		case Direction::Up: newPos.y--; break;
+		
 		case Direction::Down: newPos.y++; break;
+		
 		case Direction::Left: newPos.x--; break;
+		
 		case Direction::Right: newPos.x++; break;
+		
 		default: return;
 		}
+		
 		if (!CanMove(newPos, LevelData)) return;
+
 		auto it = EntityMap.find(newPos);
+		
 		if (it != EntityMap.end()) {
-			EntityManager::Encounters::HandleEncounter(it->second);
+			
+			// we give the right instance
+			EntityManager::Encounters::HandleEncounter(*this, it->second);
 			EntityMap.erase(newPos);
 		}
+
 		EntityMap.erase(playerPos);
 		EntityMap[newPos] = TilePlayer;
 		Engine::LevelRenderer::DrawChangedRows(LevelData, EntityMap, playerPos.y, newPos.y);
 		playerPos = newPos;
 	}
 
+
 	// ----------------- Generate New Level -----------------
 	void GenerateNewLevel() {
+		
 		LevelData = Engine::LevelGenerator::GenerateLevel();
 		EntityMap.clear();
 		EntityMap[playerPos] = TilePlayer;
@@ -648,45 +886,89 @@ public:
 		Engine::LevelRenderer::DrawInitialMap(LevelData, EntityMap);
 		DrawHUD(PlayerStatus());
 	}
+	void Resume() {
+		
+		Engine::LevelRenderer::DrawInitialMap(LevelData, EntityMap);
+		DrawHUD(PlayerStatus());
+		Sleep(200);
+		isPaused = false;
+	}
+	//--------- interrupting ----------
+	void Pause() {
+		
+		isPaused = true;
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		Engine::ClearConsole();
+
+		COORD pos = { 0, (SHORT)(GameFieldHeight / 2) };
+		SetConsoleCursorPosition(hConsole, pos);
+		SetConsoleTextAttribute(hConsole, 14);
+		std::string pauseMsg = "=== GAME PAUSED ===";
+		int padding = (GameFieldWidth - pauseMsg.size()) / 2;
+		std::cout << std::string(padding, ' ') << pauseMsg;
+		SetConsoleTextAttribute(hConsole, 7);
+	}
+
+	
 
 	// ----------------- Run Loop -----------------
-	void Run() {
-		using namespace chrono;
+	void Run(Game& game) {
+		
+		using namespace std::chrono;
 		auto lastEntityUpdate = steady_clock::now();
 		const int frameTimeMs = 20;
 
+		// main loop
 		while (true) {
-			auto frameStart = steady_clock::now();
-			InputManager::Update();
-			Direction dir = GetMoveDirection();
-			if (dir != Direction::None)
-				MovePlayer(dir);
 			
+			if (!isPaused) {
+				
+				auto frameStart = steady_clock::now();
 
-			auto now = steady_clock::now();
-			if (duration_cast<milliseconds>(now - lastEntityUpdate).count() >= 300) {
-				EntityManager::UpdateEntities(LevelData, EntityMap, playerPos);
-				lastEntityUpdate = now;
+				InputManager::Update();
+				Direction dir = GetMoveDirection();
+				
+				if (dir != Direction::None)
+					
+					MovePlayer(dir);
+
+				auto now = steady_clock::now();
+				
+				if (duration_cast<milliseconds>(now - lastEntityUpdate).count() >= 300) {
+					
+					
+					EntityManager::UpdateEntities(game,LevelData, EntityMap, playerPos); // stop entity movement
+					lastEntityUpdate = now;
+				}
+
+				EntityManager::Encounters::UpdateHUD(player);
+
+				if (EntityManager::Encounters::showingMessage)
+					
+					DrawHUD(EntityManager::Encounters::currentMessage);
+				
+				else
+					
+					DrawHUD(PlayerStatus());
+
+				InputManager::Reset();
+				auto frameEnd = steady_clock::now();
+				int sleepTime = frameTimeMs - duration_cast<milliseconds>(frameEnd - frameStart).count();
+				if (sleepTime > 0) Sleep(sleepTime);
 			}
-
-			// Fixed HUD timing
-			EntityManager::Encounters::UpdateHUD(player);
-
-			if (EntityManager::Encounters::showingMessage)
-				DrawHUD(EntityManager::Encounters::currentMessage);
-			else
-				DrawHUD(PlayerStatus());
-
-			InputManager::Reset();
-
-			auto frameEnd = steady_clock::now();
-			int sleepTime = frameTimeMs - duration_cast<milliseconds>(frameEnd - frameStart).count();
-			if (sleepTime > 0) Sleep(sleepTime);
+			
+			else {
+				
+				// waiting for resume
+				Sleep(50);
+			}
 		}
+
 	}
 
 	// ----------------- Logo Display -----------------
 	static void ShowLogo(int marginX = 2) {
+		
 		HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 		vector<string> logo = {
 			"            _____  _____ _____ _____            ",
@@ -706,12 +988,15 @@ public:
 		int startY = (GameFieldHeight - logoHeight) / 2;
 
 		for (int i = 0; i < logoHeight; i++) {
+			
 			int startX = (GameFieldWidth - (int)logo[i].size()) / 2 + marginX;
 			COORD p = { (SHORT)startX, (SHORT)(startY + i) };
 			SetConsoleCursorPosition(consoleHandle, p);
 
 			if (i <= 4) SetConsoleTextAttribute(consoleHandle, 11); // Cyan
+			
 			else if (i == 5) SetConsoleTextAttribute(consoleHandle, 7); // White
+			
 			else SetConsoleTextAttribute(consoleHandle, 14); // Yellow
 
 			cout << logo[i];
@@ -742,11 +1027,12 @@ string Game::HUDBar::lastMessage = "";
 
 // ----------------- Main -----------------
 int main() {
+	
 	Engine::HideCursor();
 	Engine::SetConsoleSize(GameFieldWidth, GameFieldHeight, 2);
 
 	Game::ShowLogo(2);
 
 	Game gameInstance;
-	gameInstance.Run();
+	gameInstance.Run(gameInstance);
 }
