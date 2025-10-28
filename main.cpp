@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include<unordered_map>
+#include <VersionHelpers.h>
 
 using namespace std;
 
@@ -51,9 +52,16 @@ public:
 	}
 
 	static void SetConsoleSize(int width, int height, int marginX = 2) {
+		bool isWin10 = IsWindows10OrGreater() && !IsWindowsVersionOrGreater(10, 0, 22000);
+		bool isWin11 = IsWindows10OrGreater() && !isWin10;
+
 		HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-		COORD bufferSize = { (SHORT)(width + marginX * 2), (SHORT)(height + 5) };
+		int extraHeight = isWin11 ? 7 : 5;
+		int extraMargin = isWin11 ? marginX + 2 : marginX;
+
+		COORD bufferSize = { (SHORT)(width + extraMargin * 2), (SHORT)(height + extraHeight) };
 		SetConsoleScreenBufferSize(consoleHandle, bufferSize);
+
 		SMALL_RECT windowSize = { 0, 0, bufferSize.X - 1, bufferSize.Y - 1 };
 		SetConsoleWindowInfo(consoleHandle, TRUE, &windowSize);
 
@@ -62,6 +70,10 @@ public:
 		style &= ~WS_MAXIMIZEBOX;
 		style &= ~WS_SIZEBOX;
 		SetWindowLong(hwnd, GWL_STYLE, style);
+
+		if (isWin11) {
+			SetConsoleTextAttribute(consoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+		}
 	}
 
 	static void ClearConsole() {
