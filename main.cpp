@@ -14,7 +14,6 @@
 
 using namespace std;
 
-// ----------------- Global Settings -----------------
 random_device rd;
 mt19937 rng(rd());
 const size_t GameFieldWidth = 80;
@@ -28,7 +27,7 @@ const char TileBoss = 'B';
 const char TileMiniBoss = 'b';
 bool isPaused = false;
 
-struct GridPosition { //position on the grid
+struct GridPosition {
 	int x, y;
 	GridPosition(int xPos = 0, int yPos = 0) : x(xPos), y(yPos) {}
 	bool operator<(const GridPosition& other) const { return tie(y, x) < tie(other.y, other.x); }
@@ -36,14 +35,13 @@ struct GridPosition { //position on the grid
 	bool operator!=(const GridPosition& other) const { return !(*this == other); }
 };
 
-struct Player { //player struct
-	int hp, maxHp, attack, defense, level;
+struct Player {
+	int hp, maxHp, attack, defense, level, money;
 };
 
-// ----------------- Engine Class -----------------
 class Engine {
 public:
-	// ----------------- Console -----------------
+
 	static void HideCursor() {
 		HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 		CONSOLE_CURSOR_INFO cursorInfo;
@@ -55,9 +53,10 @@ public:
 	static void SetConsoleSize(int width, int height, int marginX = 2) {
 		HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 		COORD bufferSize = { (SHORT)(width + marginX * 2), (SHORT)(height + 5) };
+		SetConsoleScreenBufferSize(consoleHandle, bufferSize);
 		SMALL_RECT windowSize = { 0, 0, bufferSize.X - 1, bufferSize.Y - 1 };
 		SetConsoleWindowInfo(consoleHandle, TRUE, &windowSize);
-		SetConsoleScreenBufferSize(consoleHandle, bufferSize);
+
 		HWND hwnd = GetConsoleWindow();
 		LONG style = GetWindowLong(hwnd, GWL_STYLE);
 		style &= ~WS_MAXIMIZEBOX;
@@ -66,18 +65,17 @@ public:
 	}
 
 	static void ClearConsole() {
-		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE); //setup
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
 		GetConsoleScreenBufferInfo(hConsole, &csbi);
 		DWORD consoleSize = csbi.dwSize.X * csbi.dwSize.Y;
 		COORD topLeft = { 0, 0 };
 		DWORD charsWritten;
-		FillConsoleOutputCharacter(hConsole, ' ', consoleSize, topLeft, &charsWritten); //fill with spaces
-		FillConsoleOutputAttribute(hConsole, csbi.wAttributes, consoleSize, topLeft, &charsWritten); //default color
-		SetConsoleCursorPosition(hConsole, topLeft); //cursor on 0,0
+		FillConsoleOutputCharacter(hConsole, ' ', consoleSize, topLeft, &charsWritten);
+		FillConsoleOutputAttribute(hConsole, csbi.wAttributes, consoleSize, topLeft, &charsWritten);
+		SetConsoleCursorPosition(hConsole, topLeft);
 	}
 
-	// ----------------- Level Generator -----------------
 	class LevelGenerator {
 	public:
 		static int RandomInt(int minValue, int maxValue) {
@@ -146,7 +144,7 @@ public:
 				if (reachableCount < walkableTiles - (int)clusterIndices.size()) {
 					for (int idx : clusterIndices) {
 						level[idx] = TileGround;
-					} 
+					}
 				}
 				else {
 					walkableTiles -= (int)clusterIndices.size();
@@ -156,7 +154,6 @@ public:
 		}
 	};
 
-	// ----------------- Level Renderer -----------------
 	class LevelRenderer {
 	public:
 		static void DrawInitialMap(const vector<char>& levelData, const map<GridPosition, char>& entityMap, int marginX = 2);
@@ -167,7 +164,6 @@ public:
 	};
 };
 
-// ----------------- LevelRenderer Definitions -----------------
 void Engine::LevelRenderer::DrawInitialMap(const vector<char>& levelData, const map<GridPosition, char>& entityMap, int marginX) {
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 	COORD pos = { 0, 0 };
@@ -176,7 +172,7 @@ void Engine::LevelRenderer::DrawInitialMap(const vector<char>& levelData, const 
 	for (int y = 0; y < GameFieldHeight; ++y) {
 		for (int i = 0; i < marginX; ++i) {
 			cout << ' ';
-		} 
+		}
 		for (int x = 0; x < GameFieldWidth; ++x) {
 			GridPosition gp{ x, y };
 			char ch = entityMap.count(gp) ? entityMap.at(gp) : levelData[y * GameFieldWidth + x];
@@ -191,7 +187,7 @@ void Engine::LevelRenderer::DrawInitialMap(const vector<char>& levelData, const 
 void Engine::LevelRenderer::DrawRow(const vector<char>& levelData, const map<GridPosition, char>& entityMap, int row, int marginX) {
 	if (row < 0 || row >= GameFieldHeight) {
 		return;
-	} 
+	}
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 	COORD pos = { 0, (SHORT)row };
 	SetConsoleCursorPosition(hConsole, pos);
@@ -217,38 +213,37 @@ void Engine::LevelRenderer::DrawChangedRows(const vector<char>& levelData, const
 
 void Engine::LevelRenderer::SetTileColor(HANDLE hConsole, char ch) {
 	switch (ch) {
-		case TileWall: {
-			SetConsoleTextAttribute(hConsole, 8); 
-			break;
-		} 
-		case TilePlayer: {
-			SetConsoleTextAttribute(hConsole, 9); 
-			break;
-		} 
-		case TileEnemy: {
-			SetConsoleTextAttribute(hConsole, 14); 
-			break;
-		}
-		case TileMerchant: {
-			SetConsoleTextAttribute(hConsole, 11); 
-			break;
-		} 
-		case TileMiniBoss: {
-			SetConsoleTextAttribute(hConsole, 13); 
-			break;
-		} 
-		case TileBoss: {
-			SetConsoleTextAttribute(hConsole, 4); 
-			break;
-		} 
-		default: {
-			SetConsoleTextAttribute(hConsole, 7); 
-			break;
-		} 
+	case TileWall: {
+		SetConsoleTextAttribute(hConsole, 8);
+		break;
+	}
+	case TilePlayer: {
+		SetConsoleTextAttribute(hConsole, 9);
+		break;
+	}
+	case TileEnemy: {
+		SetConsoleTextAttribute(hConsole, 14);
+		break;
+	}
+	case TileMerchant: {
+		SetConsoleTextAttribute(hConsole, 11);
+		break;
+	}
+	case TileMiniBoss: {
+		SetConsoleTextAttribute(hConsole, 13);
+		break;
+	}
+	case TileBoss: {
+		SetConsoleTextAttribute(hConsole, 4);
+		break;
+	}
+	default: {
+		SetConsoleTextAttribute(hConsole, 7);
+		break;
+	}
 	}
 }
 
-// ----------------- Game Class -----------------
 class Game {
 public:
 	vector<char> LevelData;
@@ -258,12 +253,11 @@ public:
 	enum class Direction { Up, Down, Left, Right, None };
 
 	Game() {
-		player = { 100, 100, 10, 5, 1 };
+		player = { 100, 100, 10, 5, 1, 100 };
 		playerPos = { 1, 1 };
 		GenerateNewLevel();
 	}
 
-	// ----------------- HUD -----------------
 	void DrawHUD(const string& message = "") {
 		string msg = message.empty() ? PlayerStatus() : message;
 		HUDBar::DrawHUDBar(2, msg);
@@ -274,7 +268,8 @@ public:
 		ss << "HP:" << player.hp << "/" << player.maxHp
 			<< " ATK:" << player.attack
 			<< " DEF:" << player.defense
-			<< " LVL:" << player.level;
+			<< " LVL:" << player.level
+			<< " GOLD:" << player.money;
 		return ss.str();
 	}
 
@@ -283,11 +278,11 @@ public:
 		ss << "HP:" << player.hp << "/" << player.maxHp
 			<< " ATK:" << player.attack
 			<< " DEF:" << player.defense
-			<< " LVL:" << player.level;
+			<< " LVL:" << player.level
+			<< " GOLD:" << player.money;
 		return ss.str();
 	}
 
-	//----- input handling class -----
 	class InputManager {
 	public:
 		static bool up, down, left, right;
@@ -296,28 +291,28 @@ public:
 			while (_kbhit()) {
 				char key = _getch();
 				key = tolower(key);
-				
+
 				switch (key) {
-					case 'w': {
-						up = true; 
-						break;
-					} 
-					case 's': {
-						down = true; 
-						break;
-					} 
-					case 'a': {
-						left = true; 
-						break;
-					} 
-					case 'd': {
-						right = true; 
-						break;
-					} 
-					case 27: { // ESC
-						exit(0); 
-						break;
-					}    
+				case 'w': {
+					up = true;
+					break;
+				}
+				case 's': {
+					down = true;
+					break;
+				}
+				case 'a': {
+					left = true;
+					break;
+				}
+				case 'd': {
+					right = true;
+					break;
+				}
+				case 27: {
+					exit(0);
+					break;
+				}
 				}
 			}
 		}
@@ -326,40 +321,39 @@ public:
 		}
 	};
 
-	// ----------------- HUDBar Nested Class -----------------
 	class HUDBar {
 	public:
-		static string lastMessage; // keep track of last drawn HUD
+		static string lastMessage;
 
 		static void DrawHUDBar(int marginX, const string& message) {
-			if (message == lastMessage) { // no redraw if same
-				return; 
-			} 
+			if (message == lastMessage) {
+				return;
+			}
 			lastMessage = message;
 			HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 			SetConsoleTextAttribute(consoleHandle, 7);
 			COORD pos = { 0, (SHORT)(GameFieldHeight + 1) };
 			SetConsoleCursorPosition(consoleHandle, pos);
 			string margin(marginX, ' ');
-			cout << margin;// Top border
-			
-			for (int i = 0; i < GameFieldWidth; ++i) { 
-				cout << '='; 
+			cout << margin;
+
+			for (int i = 0; i < GameFieldWidth; ++i) {
+				cout << '=';
 			}
 			cout << '\n';
-			cout << margin;// Message line
-			SetConsoleTextAttribute(consoleHandle, 14); // Yellow
+			cout << margin;
+			SetConsoleTextAttribute(consoleHandle, 14);
 			cout << message;
 
-			if ((int)message.size() < GameFieldWidth){
+			if ((int)message.size() < GameFieldWidth) {
 				cout << string(GameFieldWidth - message.size(), ' ');
 			}
 			cout << '\n';
-			SetConsoleTextAttribute(consoleHandle, 7);// Bottom border
+			SetConsoleTextAttribute(consoleHandle, 7);
 			cout << margin;
 
-			for (int i = 0; i < GameFieldWidth; ++i) { 
-				cout << '='; 
+			for (int i = 0; i < GameFieldWidth; ++i) {
+				cout << '=';
 			}
 			cout << '\n';
 		}
@@ -376,14 +370,13 @@ public:
 				for (int j = 0; j < GameFieldWidth; ++j) cout << ' ';
 				cout << '\n';
 			}
-			lastMessage = ""; // reset last message
+			lastMessage = "";
 		}
 	};
 
-	// ----------------- EntityManager -----------------
 	class EntityManager {
 	public:
-		// ----------------- ENCOUNTER HANDLER -----------------
+
 		class Encounters {
 		public:
 			static bool showingMessage;
@@ -392,30 +385,30 @@ public:
 
 			static void HandleEncounter(Game& game, char entityType) {
 				switch (entityType) {
-					case TileEnemy: {
-						currentMessage = "Encountered an enemy!";
-						EnemyEncounter(game);
-						break;
-					}
-					case TileMerchant:{
-						currentMessage = "Encountered a merchant!";
-						MerchantEncounter(game);
-						break;
-					}
-					case TileBoss:{
-						currentMessage = "Encountered a boss!";
-						BossEncounter(game);
-						break;
-					}
-					case TileMiniBoss: {
-						currentMessage = "Encountered a miniboss!";
-						MinibossEncounter(game);
-						break;
-					}
-					default: {
-						currentMessage = "";
-						return;
-					}
+				case TileEnemy: {
+					currentMessage = "Encountered an enemy!";
+					EnemyEncounter(game);
+					break;
+				}
+				case TileMerchant: {
+					currentMessage = "Encountered a merchant!";
+					MerchantEncounter(game);
+					break;
+				}
+				case TileBoss: {
+					currentMessage = "Encountered a boss!";
+					BossEncounter(game);
+					break;
+				}
+				case TileMiniBoss: {
+					currentMessage = "Encountered a miniboss!";
+					MinibossEncounter(game);
+					break;
+				}
+				default: {
+					currentMessage = "";
+					return;
+				}
 				}
 				showingMessage = true;
 				lastMessageTime = chrono::steady_clock::now();
@@ -423,27 +416,19 @@ public:
 			}
 
 			static void EnemyEncounter(Game& game) {
-				game.Pause();
-				Sleep(2000);
-				game.Resume();
+				Combat::StartCombat(game, TileEnemy);
 			}
 
 			static void MerchantEncounter(Game& game) {
-				game.Pause();
-				Sleep(2000);
-				game.Resume();
+				Shop::OpenShop(game);
 			}
 
 			static void BossEncounter(Game& game) {
-				game.Pause();
-				Sleep(2000);
-				game.Resume();
+				Combat::StartCombat(game, TileBoss);
 			}
 
 			static void MinibossEncounter(Game& game) {
-				game.Pause();
-				Sleep(2000);
-				game.Resume();
+				Combat::StartCombat(game, TileMiniBoss);
 			}
 
 			static void UpdateHUD(Player& player) {
@@ -453,7 +438,6 @@ public:
 					auto now = steady_clock::now();
 
 					if (duration_cast<milliseconds>(now - lastMessageTime).count() >= 2000) {
-
 						showingMessage = false;
 						Game::HUDBar::DrawHUDBar(2, Game::PlayerStatusStatic(player));
 					}
@@ -461,7 +445,257 @@ public:
 			}
 		};
 
-		// ----------------- AI CONTROLLER -----------------
+		class Shop {
+		public:
+			static void OpenShop(Game& game) {
+				game.Pause();
+				Engine::ClearConsole();
+
+				bool inShop = true;
+
+				auto getChoice = []() -> char {
+					char c = std::tolower(_getch());
+					std::cout << c << "\n";
+					return c;
+					};
+
+				auto confirmAction = [](const std::string& msg) -> bool {
+					std::cout << msg << " (y/n): ";
+					char c;
+					while (true) {
+						c = std::tolower(_getch());
+						if (c == 'y') { std::cout << "y\n"; return true; }
+						if (c == 'n') { std::cout << "n\n"; return false; }
+					}
+					};
+
+				while (inShop) {
+					while (true) {
+						Engine::ClearConsole();
+						std::cout << "=== MERCHANT'S SHOP ===\n";
+						std::cout << "Welcome, traveler!\n\n";
+						std::cout << "Your current stats:\n";
+						std::cout << "HP: " << game.player.hp << "/" << game.player.maxHp << "\n";
+						std::cout << "ATK: " << game.player.attack << "\n";
+						std::cout << "DEF: " << game.player.defense << "\n";
+						std::cout << "LVL: " << game.player.level << "\n";
+						std::cout << "Gold: " << game.player.money << "\n\n";
+
+						std::cout << "Choose an option:\n";
+						std::cout << "[H] Heal to full HP (10 gold)\n";
+						std::cout << "[1] Upgrade Max HP (+10) (20 gold)\n";
+						std::cout << "[2] Upgrade Attack (+2) (15 gold)\n";
+						std::cout << "[3] Upgrade Defense (+2) (15 gold)\n";
+						std::cout << "[E] Exit Shop\n\n";
+						std::cout << "Enter your choice: ";
+
+						char choice = getChoice();
+						bool validInput = true;
+
+						switch (choice) {
+						case 'h':
+							if (game.player.money >= 10 && confirmAction("Heal to full HP for 10 gold?")) {
+								game.player.hp = game.player.maxHp;
+								game.player.money -= 10;
+								std::cout << "You have been fully healed!\n";
+							}
+							else validInput = false;
+							break;
+
+						case '1':
+							if (game.player.money >= 20 && confirmAction("Upgrade Max HP for 20 gold?")) {
+								game.player.maxHp += 10;
+								game.player.money -= 20;
+								std::cout << "Your maximum HP increased to " << game.player.maxHp << "!\n";
+							}
+							else validInput = false;
+							break;
+
+						case '2':
+							if (game.player.money >= 15 && confirmAction("Upgrade Attack for 15 gold?")) {
+								game.player.attack += 2;
+								game.player.money -= 15;
+								std::cout << "Your attack increased to " << game.player.attack << "!\n";
+							}
+							else validInput = false;
+							break;
+
+						case '3':
+							if (game.player.money >= 15 && confirmAction("Upgrade Defense for 15 gold?")) {
+								game.player.defense += 2;
+								game.player.money -= 15;
+								std::cout << "Your defense increased to " << game.player.defense << "!\n";
+							}
+							else validInput = false;
+							break;
+
+						case 'e':
+							std::cout << "Safe travels, adventurer!\n";
+							inShop = false;
+							break;
+
+						default:
+							std::cout << "Invalid choice. Try again...\n";
+							validInput = false;
+							break;
+						}
+
+						if (validInput) {
+							std::cout << "Press any key to continue...\n";
+							_getch();  							break;
+						}
+						else {
+							std::cout << "Press any key to continue...\n";
+							_getch();
+						}
+					}
+				}
+
+				Engine::ClearConsole();
+				game.Resume();
+			}
+		};
+
+		class Combat {
+		public:
+			static void StartCombat(Game& game, const char enemyType) {
+				Engine::ClearConsole();
+
+				int enemyHp, enemyAttack, enemyDefense, reward;
+				std::string enemyName;
+
+				switch (enemyType) {
+				case TileEnemy:
+					enemyName = "Enemy";
+					enemyHp = 40;
+					enemyAttack = 7;
+					enemyDefense = 2;
+					reward = 10;
+					break;
+				case TileMiniBoss:
+					enemyName = "MiniBoss";
+					enemyHp = 100;
+					enemyAttack = 14;
+					enemyDefense = 4;
+					reward = 50;
+					break;
+				case TileBoss:
+					enemyName = "Boss";
+					enemyHp = 300;
+					enemyAttack = 20;
+					enemyDefense = 8;
+					reward = 200;
+					break;
+				default:
+					return;
+				}
+
+				bool playerAlive = true;
+				game.Pause();
+
+				auto getChoice = []() -> char {
+					char c = std::tolower(_getch());
+					std::cout << c << "\n";
+					return c;
+					};
+
+				auto confirmAction = [](const std::string& msg) -> bool {
+					std::cout << msg << " (y/n): ";
+					char c;
+					while (true) {
+						c = std::tolower(_getch());
+						if (c == 'y') { std::cout << "y\n"; return true; }
+						if (c == 'n') { std::cout << "n\n"; return false; }
+					}
+					};
+
+				while (enemyHp > 0 && game.player.hp > 0) {
+					int damageToPlayer = max(0, enemyAttack - game.player.defense);
+					game.player.hp -= damageToPlayer;
+
+					Engine::ClearConsole();
+					if (game.player.hp <= 0) {
+						std::cout << enemyName << " attacks! You take " << damageToPlayer
+							<< " damage. (HP:0/" << game.player.maxHp << ")\n";
+						std::cout << "\nYou were defeated...\n";
+						playerAlive = false;
+						break;
+					}
+					else {
+						std::cout << enemyName << " attacks! You take " << damageToPlayer
+							<< " damage. (HP:" << game.player.hp << "/" << game.player.maxHp << ")\n";
+					}
+					std::cout << enemyName << " HP: " << enemyHp << "\n";
+					std::cout << "Your HP: " << game.player.hp << "\n";
+
+					std::cout << "[A] Attack  [H] Heal  [Q] Run\n";
+					std::cout << "Your choice: ";
+					char action = getChoice();
+					bool validInput = true;
+
+					switch (action) {
+					case 'a': {
+						if (confirmAction("Attack " + enemyName + "?")) {
+							int damageToEnemy = max(0, game.player.attack - enemyDefense);
+							enemyHp -= damageToEnemy;
+							Engine::ClearConsole();
+							std::cout << "You hit " << enemyName << " for " << damageToEnemy
+								<< " damage! (Enemy HP: " << max(0, enemyHp) << ")\n";
+							std::cout << "Your HP: " << game.player.hp << "\n";
+						}
+						else validInput = false;
+						break;
+					}
+					case 'h': {
+						int heal = min(15, game.player.maxHp - game.player.hp);
+						if (confirmAction("Heal " + std::to_string(heal) + " HP?")) {
+							game.player.hp += heal;
+							Engine::ClearConsole();
+							std::cout << "You heal " << heal << " HP. (HP:" << game.player.hp
+								<< "/" << game.player.maxHp << ")\n";
+							std::cout << enemyName << " HP: " << enemyHp << "\n";
+						}
+						else validInput = false;
+						break;
+					}
+					case 'q':
+						if (confirmAction("Flee the battle?")) {
+							std::cout << "You fled the battle!\n";
+							game.Resume();
+							return;
+						}
+						else validInput = false;
+						break;
+					default:
+						std::cout << "Invalid input.\n";
+						validInput = false;
+						break;
+					}
+
+					if (!validInput) {
+						std::cout << "Invalid input.\n";
+						_getch();
+					}
+				}
+
+				if (playerAlive && enemyHp <= 0) {
+					Engine::ClearConsole();
+					std::cout << "\nYou defeated " << enemyName << "!\n";
+					game.player.money += reward;
+					std::cout << "You earned " << reward << " gold! (Total gold: "
+						<< game.player.money << ")\n";
+				}
+
+				if (enemyType == TileBoss && enemyHp <= 0) {
+					GameWinManager::ShowGameWin();
+				}
+
+				std::cout << "\nPress any key to continue...";
+				_getch();
+				game.Resume();
+			}
+		};
+
 		class AIController {
 		public:
 			static int stepCounter;
@@ -495,7 +729,6 @@ public:
 				return true;
 			}
 
-			// ---------------- LINE OF SIGHT CHECK ----------------
 			static bool HasLineOfSight(GridPosition from, GridPosition to,
 				const vector<char>& levelData) {
 				int x0 = from.x, y0 = from.y;
@@ -505,27 +738,26 @@ public:
 				int err = dx + dy;
 
 				while (true) {
-					if (levelData[y0 * GameFieldWidth + x0] != TileGround && !(x0 == from.x && y0 == from.y)){
-						return false; // wall blocks LOS
+					if (levelData[y0 * GameFieldWidth + x0] != TileGround && !(x0 == from.x && y0 == from.y)) {
+						return false;
 					}
 					if (x0 == x1 && y0 == y1) {
 						break;
 					}
 					int e2 = 2 * err;
 
-					if (e2 >= dy) { 
-						err += dy; 
-						x0 += sx; 
+					if (e2 >= dy) {
+						err += dy;
+						x0 += sx;
 					}
-					if (e2 <= dx) { 
+					if (e2 <= dx) {
 						err += dx;
-						y0 += sy; 
+						y0 += sy;
 					}
 				}
 				return true;
 			}
 
-			// ---------------- PATHFINDING ----------------
 			static vector<GridPosition> AStarPath(GridPosition start, GridPosition goal,
 				const vector<char>& levelData,
 				const map<GridPosition, char>& entityMap) {
@@ -567,7 +799,6 @@ public:
 				return {};
 			}
 
-			// ---------------- ENEMY TARGETING ----------------
 			static GridPosition GetNextAIMove(vector<char>& levelData, map<GridPosition, char>& entityMap,
 				GridPosition playerPos) {
 				stepCounter++;
@@ -580,13 +811,13 @@ public:
 
 					for (auto& kv : entityMap) {
 						char t = kv.second;
-						
+
 						if (t != TileEnemy && t != TileMiniBoss && t != TileBoss) {
 							continue;
 						}
 						int dist = ManhattanDistance(kv.first, playerPos);
 
-						if (HasLineOfSight(kv.first, playerPos, levelData)){
+						if (HasLineOfSight(kv.first, playerPos, levelData)) {
 							visibleEnemies.push_back({ dist, kv.first });
 						}
 						else {
@@ -596,11 +827,11 @@ public:
 					GridPosition chosen{ -1, -1 };
 
 					if (!visibleEnemies.empty()) {
-						sort(visibleEnemies.begin(), visibleEnemies.end(),[](auto& a, auto& b) { return a.first < b.first; });
+						sort(visibleEnemies.begin(), visibleEnemies.end(), [](auto& a, auto& b) { return a.first < b.first; });
 						chosen = visibleEnemies.front().second;
 					}
 					else if (!hiddenEnemies.empty()) {
-						sort(hiddenEnemies.begin(), hiddenEnemies.end(),[](auto& a, auto& b) { return a.first < b.first; });
+						sort(hiddenEnemies.begin(), hiddenEnemies.end(), [](auto& a, auto& b) { return a.first < b.first; });
 						chosen = hiddenEnemies.front().second;
 					}
 					if (chosen.x != -1) {
@@ -618,11 +849,10 @@ public:
 			}
 		};
 
-		// ----------------- UTILITIES -----------------
 		static vector<GridPosition> GetWalkableTiles(const vector<char>& levelData) {
 			vector<GridPosition> walkable;
 
-			for (int y = 0; y < GameFieldHeight; ++y){
+			for (int y = 0; y < GameFieldHeight; ++y) {
 				for (int x = 0; x < GameFieldWidth; ++x) {
 					if (levelData[y * GameFieldWidth + x] == TileGround) {
 						walkable.push_back({ x, y });
@@ -641,22 +871,21 @@ public:
 			for (auto& pos : walkable) {
 				if (entityMap.count(pos)) {
 					continue;
-				} 
+				}
 				entityMap[pos] = entityChar;
 
 				if (++placed >= count) {
 					break;
-				} 
+				}
 			}
 		}
 
-		// ----------------- ENTITY UPDATES -----------------
 		static void UpdateEntities(Game& game, vector<char>& levelData, map<GridPosition, char>& entityMap,
 			GridPosition playerPos) {
 			vector<GridPosition> positions;
 
 			for (auto& kv : entityMap) {
-				if (kv.second != TilePlayer){
+				if (kv.second != TilePlayer) {
 					positions.push_back(kv.first);
 				}
 			}
@@ -665,7 +894,7 @@ public:
 			for (auto& pos : positions) {
 				if (!entityMap.count(pos)) {
 					continue;
-				} 
+				}
 				char type = entityMap[pos];
 				GridPosition newPos = pos;
 
@@ -678,44 +907,43 @@ public:
 
 					for (auto dir : dirs) {
 						newPos = pos;
-						
+
 						switch (dir) {
-							case Direction::Up: {
-								newPos.y--; break;
-							} 
-							case Direction::Down: {
-								newPos.y++; break;
-							} 
-							case Direction::Left: {
-								newPos.x--; break;
-							} 
-							case Direction::Right: {
-								newPos.x++; break;
-							} 
-							default: {
-								break;
-							} 
+						case Direction::Up: {
+							newPos.y--; break;
 						}
-						
-						if (newPos.x < 0 || newPos.x >= GameFieldWidth || newPos.y < 0 || newPos.y >= GameFieldHeight){
-							continue;
+						case Direction::Down: {
+							newPos.y++; break;
 						}
-						if (levelData[newPos.y * GameFieldWidth + newPos.x] != TileGround){
-							continue;
+						case Direction::Left: {
+							newPos.x--; break;
 						}
-						if (entityMap.count(newPos) && entityMap[newPos] != TilePlayer){ // entities block each other completely
-							continue;
+						case Direction::Right: {
+							newPos.x++; break;
 						}
-						if (newPos == playerPos) { // allow enemies to chase player
+						default: {
 							break;
 						}
-						if (!entityMap.count(newPos)){
+						}
+
+						if (newPos.x < 0 || newPos.x >= GameFieldWidth || newPos.y < 0 || newPos.y >= GameFieldHeight) {
+							continue;
+						}
+						if (levelData[newPos.y * GameFieldWidth + newPos.x] != TileGround) {
+							continue;
+						}
+						if (entityMap.count(newPos) && entityMap[newPos] != TilePlayer) {
+							continue;
+						}
+						if (newPos == playerPos) {
+							break;
+						}
+						if (!entityMap.count(newPos)) {
 							break;
 						}
 					}
 				}
 
-				// Enemy catches player
 				if (newPos == playerPos) {
 					if (type == TileEnemy || type == TileMiniBoss || type == TileBoss) {
 						entityMap.erase(pos);
@@ -728,9 +956,8 @@ public:
 					}
 				}
 
-				// Prevent collisions between entities
 				if (newPos != pos) {
-					if (entityMap.count(newPos) && entityMap[newPos] != TilePlayer){
+					if (entityMap.count(newPos) && entityMap[newPos] != TilePlayer) {
 						continue;
 					}
 					entityMap.erase(pos);
@@ -741,9 +968,8 @@ public:
 		}
 	};
 
-	// ----------------- Player Movement -----------------
 	static bool CanMove(const GridPosition& pos, const vector<char>& levelData) {
-		if (pos.x < 0 || pos.x >= GameFieldWidth || pos.y < 0 || pos.y >= GameFieldHeight){
+		if (pos.x < 0 || pos.x >= GameFieldWidth || pos.y < 0 || pos.y >= GameFieldHeight) {
 			return false;
 		}
 		return levelData[pos.y * GameFieldWidth + pos.x] == TileGround;
@@ -755,13 +981,13 @@ public:
 		}
 		else if (InputManager::down) {
 			return Direction::Down;
-		} 
+		}
 		else if (InputManager::left) {
 			return Direction::Left;
-		} 
+		}
 		else if (InputManager::right) {
 			return Direction::Right;
-		} 
+		}
 		else {
 			return Direction::None;
 		}
@@ -771,34 +997,34 @@ public:
 		GridPosition newPos = playerPos;
 
 		switch (dir) {
-			case Direction::Up:{
-				newPos.y--; 
-				break;
-			}
-			case Direction::Down: {
-				newPos.y++; 
-				break;
-			}
-			case Direction::Left: {
-				newPos.x--; 
-				break;
-			}
-			case Direction::Right: {
-				newPos.x++; 
-				break;
-			}
-			default: {
-				return;
-			}
+		case Direction::Up: {
+			newPos.y--;
+			break;
+		}
+		case Direction::Down: {
+			newPos.y++;
+			break;
+		}
+		case Direction::Left: {
+			newPos.x--;
+			break;
+		}
+		case Direction::Right: {
+			newPos.x++;
+			break;
+		}
+		default: {
+			return;
+		}
 		}
 
 		if (!CanMove(newPos, LevelData)) {
 			return;
-		} 
+		}
 		auto it = EntityMap.find(newPos);
 
 		if (it != EntityMap.end()) {
-			// we give the right instance
+
 			EntityManager::Encounters::HandleEncounter(*this, it->second);
 			EntityMap.erase(newPos);
 		}
@@ -808,86 +1034,213 @@ public:
 		playerPos = newPos;
 	}
 
-	// ----------------- Generate New Level -----------------
 	void GenerateNewLevel() {
 		LevelData = Engine::LevelGenerator::GenerateLevel();
 		EntityMap.clear();
+		playerPos = { 1, 1 };
 		EntityMap[playerPos] = TilePlayer;
-		EntityManager::PlaceEntitiesRandomly(LevelData, EntityMap, TileEnemy, 5);
-		EntityManager::PlaceEntitiesRandomly(LevelData, EntityMap, TileMerchant, 5);
-		EntityManager::PlaceEntitiesRandomly(LevelData, EntityMap, TileBoss, 5);
-		EntityManager::PlaceEntitiesRandomly(LevelData, EntityMap, TileMiniBoss, 5);
+
+		WaveManager::WaveInfo wave = waveManager.GetNextWave();
+
+		if (wave.enemies > 0)
+			EntityManager::PlaceEntitiesRandomly(LevelData, EntityMap, TileEnemy, wave.enemies);
+
+		if (wave.minibosses > 0)
+			EntityManager::PlaceEntitiesRandomly(LevelData, EntityMap, TileMiniBoss, wave.minibosses);
+
+		if (wave.bosses > 0)
+			EntityManager::PlaceEntitiesRandomly(LevelData, EntityMap, TileBoss, wave.bosses);
+
+		if (wave.merchants > 0)
+			EntityManager::PlaceEntitiesRandomly(LevelData, EntityMap, TileMerchant, wave.merchants);
+
 		Engine::LevelRenderer::DrawInitialMap(LevelData, EntityMap);
 		DrawHUD(PlayerStatus());
 	}
-	
+
 	void Resume() {
 		Engine::LevelRenderer::DrawInitialMap(LevelData, EntityMap);
 		DrawHUD(PlayerStatus());
 		Sleep(200);
 		isPaused = false;
 	}
-	
-	//--------- interrupting ----------
+
 	void Pause() {
 		isPaused = true;
-		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 		Engine::ClearConsole();
-		COORD pos = { 0, (SHORT)(GameFieldHeight / 2) };
-		SetConsoleCursorPosition(hConsole, pos);
-		SetConsoleTextAttribute(hConsole, 14);
-		std::string pauseMsg = "=== GAME PAUSED ===";
-		int padding = (GameFieldWidth - pauseMsg.size()) / 2;
-		std::cout << std::string(padding, ' ') << pauseMsg;
-		SetConsoleTextAttribute(hConsole, 7);
 	}
 
-	// ----------------- Run Loop -----------------
+	bool EntityMapFinishedWave() const {
+		for (const auto& kv : EntityMap) {
+			char type = kv.second;
+			if (type == TileEnemy || type == TileMiniBoss || type == TileBoss || type == TileMerchant) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	void Run(Game& game) {
 		using namespace std::chrono;
 		auto lastEntityUpdate = steady_clock::now();
 		const int frameTimeMs = 20;
 
-		while (true) { //main loop
+		while (true) {
 			if (!isPaused) {
 				auto frameStart = steady_clock::now();
 				InputManager::Update();
 				Direction dir = GetMoveDirection();
 
-				if (dir != Direction::None){
-
+				if (player.hp <= 0) {
+					Pause();
+					GameOverManager::HandleGameOver();
+				}
+				if (dir != Direction::None) {
 					MovePlayer(dir);
 				}
-				auto now = steady_clock::now();
 
+				auto now = steady_clock::now();
 				if (duration_cast<milliseconds>(now - lastEntityUpdate).count() >= 300) {
-					EntityManager::UpdateEntities(game, LevelData, EntityMap, playerPos); //stop entity movement
+					EntityManager::UpdateEntities(game, LevelData, EntityMap, playerPos);
 					lastEntityUpdate = now;
 				}
+
 				EntityManager::Encounters::UpdateHUD(player);
 
-				if (EntityManager::Encounters::showingMessage){
+				if (EntityManager::Encounters::showingMessage) {
 					DrawHUD(EntityManager::Encounters::currentMessage);
 				}
 				else {
 					DrawHUD(PlayerStatus());
 				}
+
 				InputManager::Reset();
 				auto frameEnd = steady_clock::now();
 				int sleepTime = frameTimeMs - duration_cast<milliseconds>(frameEnd - frameStart).count();
-				if (sleepTime > 0) {
-					Sleep(sleepTime);
-				} 
-			}
+				if (sleepTime > 0) Sleep(sleepTime);
 
-			else { // waiting for resume
+				if (EntityMapFinishedWave()) {
+					GenerateNewLevel();
+				}
+			}
+			else {
 				Sleep(50);
 			}
 		}
-
 	}
 
-	// ----------------- Logo Display -----------------
+	class GameOverManager {
+	public:
+		static void ShowGameOver() {
+			HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+			std::vector<std::string> logo = {
+				"  _____                        ",
+				" / ____|                       ",
+				"| |  __  __ _ _ __ ___   ___   ",
+				"| | |_ |/ _` | '_ ` _ \\ / _ \\  ",
+				"| |__| | (_| | | | | | |  __/  ",
+				" \\_____|\\__,_|_| |_| |_|\\___|  ",
+				"   / __ \\                       ",
+				"  | |  | |_   _____ _ __         ",
+				"  | |  | \\ \\ / / _ \\ '__|       ",
+				"  | |__| |\\ V /  __/ |           ",
+				"   \\____/  \\_/ \\___|_|           "
+
+			};
+
+			int logoHeight = (int)logo.size();
+			int startY = (GameFieldHeight - logoHeight) / 2;
+
+			for (int i = 0; i < logoHeight; i++) {
+				int startX = (GameFieldWidth - (int)logo[i].size()) / 2;
+				COORD p = { (SHORT)startX, (SHORT)(startY + i) };
+				SetConsoleCursorPosition(consoleHandle, p);
+				SetConsoleTextAttribute(consoleHandle, 12);
+				std::cout << logo[i];
+			}
+
+			SetConsoleTextAttribute(consoleHandle, 7);
+			Sleep(1000);
+			COORD pos = { 0, 0 };
+			SetConsoleCursorPosition(consoleHandle, pos);
+		}
+
+		static void HandleGameOver() {
+			ShowGameOver();
+			exit(0);
+		}
+	};
+
+	class WaveManager {
+	public:
+		int currentWave = 0;
+
+		struct WaveInfo {
+			int enemies;
+			int minibosses;
+			int bosses;
+			int merchants;
+		};
+
+		WaveManager() {}
+
+		WaveInfo GetNextWave() {
+			currentWave++;
+			WaveInfo wave{ 0, 0, 0, 1 };
+			wave.enemies = 4 + currentWave / 2;
+
+			if (currentWave % 10 == 0) {
+				wave.minibosses = currentWave / 10;
+				wave.enemies = max(0, wave.enemies - wave.minibosses);
+			}
+
+			if (currentWave == 100) {
+				wave.bosses = 1;
+				wave.enemies = 0;
+				wave.minibosses = 0;
+			}
+
+			return wave;
+		}
+	};
+	WaveManager waveManager;
+
+	class GameWinManager {
+	public:
+		static void ShowGameWin() {
+			HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+			std::vector<std::string> logo = {
+				"__      ___      _                   _",
+				"\\ \\    / (_)    | |                 | |",
+				" \\ \\  / / _  ___| |_ ___  _ __ _   _| |",
+				"  \\ \\/ / | |/ __| __/ _ \\| '__| | | | |",
+				"   \\  /  | | (__| || (_) | |  | |_| |_|",
+				"    \\/   |_|\\___|\\__\\___/|_|   \\__, (_)",
+				"                                 __/ |",
+				"                                |___/"
+
+			};
+
+			int logoHeight = (int)logo.size();
+			int startY = (GameFieldHeight - logoHeight) / 2;
+
+			for (int i = 0; i < logoHeight; i++) {
+				int startX = (GameFieldWidth - (int)logo[i].size()) / 2;
+				COORD p = { (SHORT)startX, (SHORT)(startY + i) };
+				SetConsoleCursorPosition(consoleHandle, p);
+				SetConsoleTextAttribute(consoleHandle, 2);
+				std::cout << logo[i];
+			}
+
+			SetConsoleTextAttribute(consoleHandle, 7);
+			std::cout << "\n\n";
+			std::cout << "Congratulations! You defeated the boss!\n";
+			std::cout << "Press any key to exit...";
+			_getch();
+			exit(0);
+		}
+	};
+
 	static void ShowLogo(int marginX = 2) {
 		HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 		vector<string> logo = {
@@ -912,26 +1265,27 @@ public:
 			SetConsoleCursorPosition(consoleHandle, p);
 
 			if (i <= 4) {
-				SetConsoleTextAttribute(consoleHandle, 11); // Cyan
+				SetConsoleTextAttribute(consoleHandle, 11);
 			}
 			else if (i == 5) {
-				SetConsoleTextAttribute(consoleHandle, 7); // White
-			} 
-			else {
-				SetConsoleTextAttribute(consoleHandle, 14); // Yellow
+				SetConsoleTextAttribute(consoleHandle, 7);
 			}
-			
+			else {
+				SetConsoleTextAttribute(consoleHandle, 14);
+			}
+
 			cout << logo[i];
-			SetConsoleTextAttribute(consoleHandle, 7); // Reset
+			SetConsoleTextAttribute(consoleHandle, 7);
 		}
 		Sleep(1000);
 		COORD pos = { 0, 0 };
 		SetConsoleCursorPosition(consoleHandle, pos);
 		SetConsoleTextAttribute(consoleHandle, 7);
+
 	}
+
 };
 
-//definitions
 bool Game::InputManager::up = false;
 bool Game::InputManager::down = false;
 bool Game::InputManager::left = false;
@@ -946,11 +1300,10 @@ chrono::steady_clock::time_point Game::EntityManager::Encounters::lastMessageTim
 string Game::EntityManager::Encounters::currentMessage = "";
 string Game::HUDBar::lastMessage = "";
 
-// ----------------- Main -----------------
 int main() {
 	Engine::HideCursor();
 	Engine::SetConsoleSize(GameFieldWidth, GameFieldHeight, 2);
 	Game::ShowLogo(2);
-	Game gameInstance;
-	gameInstance.Run(gameInstance);
+	Game game;
+	game.Run(game);
 }
