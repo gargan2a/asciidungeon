@@ -47,6 +47,7 @@ All input is **real-time**, no need to press Enter.
 ---
 
 ## 🛠️ Requirements
+- Windows 10
 - Windows (x64) terminal build  
 - C++17 or newer  
 - Compiled binary provided (no external dependencies)
@@ -55,7 +56,8 @@ All input is **real-time**, no need to press Enter.
 
 ## 💬 Notes
 This version is the **final stable build**.  
-No further commits or updates will be added.  
+No further commits or updates will be added.
+For best experience I deeply encourage compiling yourself. 
 Enjoy your adventure — and good luck making it to the 100th turn!
 
 ---
