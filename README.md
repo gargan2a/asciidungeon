@@ -1,6 +1,6 @@
 # ASCII Dungeon
 
-**ASCII Dungeon** is a lightweight terminal-based dungeon crawler written in C++.  
+**ASCII Dungeon** is a lightweight terminal-based wndows 10 only dungeon crawler written in C++.  
 It features turn-based combat, a scaling difficulty system, and classic ASCII-style visuals.
 
 ---
